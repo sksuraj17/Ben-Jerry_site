@@ -188,6 +188,7 @@ header nav ul li a {
 header nav ul li a:hover{
     color:crimson;
     background: #2196f3;
+    text-decoration: none;
 }  
 .menu-toggle{
     color:crimson;

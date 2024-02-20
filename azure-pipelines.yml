@@ -1,17 +1,112 @@
-# HTML
-# Archive your static HTML project and save it with the build record.
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
 # Add steps that build, run tests, deploy, and more:
 # https://aka.ms/yaml
 
 trigger:
-- main
+- master
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: 'windows-latest'
 
-steps:
-- task: ArchiveFiles@2
-  inputs:
-    rootFolderOrFile: '$(build.sourcesDirectory)'
-    includeRootFolder: false
-- task: PublishBuildArtifacts@1
+variables:
+  buildConfiguration: 'Release'
+
+stages:
+  - stage: 
+    displayName: Build
+    jobs:
+    - job: build
+      steps:
+
+      - task: UseDotNet@2 
+        displayName: "set dotnet version"
+        inputs:
+          packageType: 'sdk'
+          version: '3.1.x'
+
+      - task: DotNetCoreCLI@2
+        displayName: restore
+        inputs:
+          command: 'restore'
+          projects: '**/*.csproj'
+          feedsToUse: 'select'
+          vstsFeed: 'e39083b6-9ece-428d-8a08-f0c16e8b464c'
+
+      - task: DotNetCoreCLI@2
+        displayName: Build
+        inputs:
+          command: 'build'
+          projects: '**/*.csproj'
+          arguments: '--configuration $(buildConfiguration)'
+
+      - task: DotNetCoreCLI@2
+        displayName: Test
+        inputs:
+          command: test
+          projects: '**/*Tests/*.csproj'
+          arguments: '--configuration $(buildConfiguration) /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=$(Build.SourcesDirectory)/TestResults/Coverage/'
+          publishTestResults: true
+
+      - task: PublishCodeCoverageResults@1
+        displayName: 'Publish code coverage report'
+        inputs:
+              codeCoverageTool: 'Cobertura'
+              summaryFileLocation: '$(Build.SourcesDirectory)/**/coverage.cobertura.xml'
+
+      - task: DotNetCoreCLI@2
+        displayName: Publish
+        inputs:
+          command: publish
+          publishWebProjects: True
+          arguments: '--configuration $(BuildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+          zipAfterPublish: True 
+
+      - publish: $(Build.ArtifactStagingDirectory)
+        artifact: web-app 
+
+  - stage: 
+    displayName: Deploy DEV
+    jobs:
+    - deployment: DEV
+      displayName: Deploy to Web App
+      environment: DEV
+      strategy: 
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: web-app
+
+              - task: AzureRmWebAppDeployment@4
+                inputs:
+                  ConnectionType: 'AzureRM'
+                  azureSubscription: 'Personal-Az-Acc'
+                  appType: 'webApp'
+                  WebAppName: 'learning-app-01'
+                  packageForLinux: '$(Pipeline.Workspace)/**/*.zip'
+                  enableCustomDeployment: true
+                  DeploymentType: 'webDeploy'
+
+  - stage: 
+    displayName: Deploy TEST
+    jobs:
+    - deployment: TEST
+      displayName: Deploy to Web App
+      environment: TEST
+      strategy: 
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: web-app
+
+              - task: AzureRmWebAppDeployment@4
+                inputs:
+                  ConnectionType: 'AzureRM'
+                  azureSubscription: 'Personal-Az-Acc'
+                  appType: 'webApp'
+                  WebAppName: 'learning-app-01'
+                  packageForLinux: '$(Pipeline.Workspace)/**/*.zip'
+                  enableCustomDeployment: true
+                  DeploymentType: 'webDeploy'
